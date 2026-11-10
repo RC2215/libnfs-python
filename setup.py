@@ -3,9 +3,11 @@ from os import environ
 
 try:
     from setuptools import setup, Extension
+    from setuptools.command.build import build
     from setuptools.command.build_ext import build_ext
 except ImportError:
     from distutils.core import setup, Extension
+    from distutils.command.build import build
     from distutils.command.build_ext import build_ext
 
 # Although setuptools supports swig, it fails to copy the generated
@@ -24,7 +26,6 @@ else:
             install.run(self)
     cmdclass['install'] = Install
 
-from distutils.command.build import build
 
 class Build(build):
     def run(self):

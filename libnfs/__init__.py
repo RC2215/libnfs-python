@@ -74,7 +74,7 @@ class NFSFH(object):
         self._nfsfh = new_NFSFileHandle()
         _status = nfs_open(self._nfs, path, _mode, self._nfsfh)
         if _status == -errno.ENOENT and _mode & os.O_CREAT:
-            _status = nfs_create(self._nfs, path, _mode, 0o664, self._nfsfh)
+            _status = nfs_open2(self._nfs, path, _mode, 0o664, self._nfsfh)
         if _status == -errno.ENOENT:
                 raise IOError(errno.ENOENT, 'No such file or directory');
         if _status != 0:
@@ -105,7 +105,7 @@ class NFSFH(object):
                 data = bytearray(data.encode(self._codec))
             else:
                 data = bytearray(data)
-        nfs_write(self._nfs, self._nfsfh, len(data), data)
+        nfs_write(self._nfs, self._nfsfh, data)
         self._need_flush = True
 
     def read(self, size=-1):
@@ -118,14 +118,14 @@ class NFSFH(object):
             size = _st.nfs_size - _pos
 
         buf = bytearray(size)
-        count = nfs_read(self._nfs, self._nfsfh, len(buf), buf)
+        count = nfs_read(self._nfs, self._nfsfh, buf)
         if self._binary:
             return buf[:count]
 
         if self._codec:
             return buf[:count].decode(self._codec)
         else:
-            return str(buf[:count])
+            return bytes(buf[:count])
 
     def fstat(self):
         _stat = nfs_stat_64()
