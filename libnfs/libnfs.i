@@ -161,6 +161,8 @@ extern uint64_t nfs_get_writemax(struct nfs_context *nfs);
 extern void nfs_set_tcp_syncnt(struct nfs_context *nfs, int v);
 extern void nfs_set_uid(struct nfs_context *nfs, int uid);
 extern void nfs_set_gid(struct nfs_context *nfs, int gid);
+enum rpc_transport { RPC_TRANSPORT_TCP = 0, RPC_TRANSPORT_RDMA };
+extern int nfs_set_transport(struct nfs_context *nfs, enum rpc_transport transport);
 
 extern int nfs_mount(struct nfs_context *nfs, const char *server, const char *exportname);
 extern int nfs_stat64(struct nfs_context *nfs, const char *path, struct nfs_stat_64 *st);
