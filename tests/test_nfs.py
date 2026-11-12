@@ -35,7 +35,7 @@ def make_url(version, export=EXPORT):
 
 
 @unittest.skipUnless(SERVER, 'NFS_TEST_SERVER is not set')
-class NFSTests(object):
+class NFSTests:
     """Test cases; the concrete NFSv3/NFSv4 classes below set `version`."""
 
     version = None
@@ -62,12 +62,12 @@ class NFSTests(object):
 
     def write_file(self, path, data):
         f = self.nfs.open(path, mode='wb')
-        f.write(bytearray(data))
+        f.write(bytes(data))
         f.close()
 
     def read_file(self, path):
         f = self.nfs.open(path, mode='rb')
-        data = bytes(f.read())
+        data = f.read()
         f.close()
         return data
 
@@ -86,17 +86,17 @@ class NFSTests(object):
     # -------------------------------------------------- open/read/write
 
     def test_write_then_read_back(self):
-        payload = bytes(bytearray(range(256))) * 16
+        payload = bytes(range(256)) * 16
         self.write_file(self.path('data.bin'), payload)
         self.assertEqual(self.read_file(self.path('data.bin')), payload)
 
     def test_read_with_size_and_seek(self):
         self.write_file(self.path('data.txt'), b'0123456789')
         f = self.nfs.open(self.path('data.txt'), mode='rb')
-        self.assertEqual(bytes(f.read(4)), b'0123')
+        self.assertEqual(f.read(4), b'0123')
         self.assertEqual(f.tell(), 4)
         f.seek(7, os.SEEK_SET)
-        self.assertEqual(bytes(f.read()), b'789')
+        self.assertEqual(f.read(), b'789')
         f.close()
 
     def test_large_write(self):
@@ -132,6 +132,18 @@ class NFSTests(object):
         with self.assertRaises(IOError) as cm:
             self.nfs.open(self.path('missing'), mode='rb')
         self.assertEqual(cm.exception.errno, errno.ENOENT)
+
+    def test_write_wrong_type(self):
+        path = self.path('f')
+        f = self.nfs.open(path, mode='w')
+        with self.assertRaises(TypeError):
+            f.write(b'non-binary mode')
+        f.close()
+
+        f = self.nfs.open(path, mode='wb')
+        with self.assertRaises(TypeError):
+            f.write('binary mode')
+        f.close()
 
     # ------------------------------------------------------------- stat
 

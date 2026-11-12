@@ -16,7 +16,6 @@
 import errno
 import os
 import stat
-import sys
 from .libnfs import *
 
 def _stat_to_dict(stat):
@@ -39,18 +38,13 @@ def _stat_to_dict(stat):
                 }
 
 
-class NFSFH(object):
+class NFSFH:
     def __init__(self, nfs, path, mode='r', codec=None):
 
         self._nfs = nfs
         self._name = path
 
-        if codec:
-            self._codec = codec
-        elif sys.version_info[0] > 2:
-            self._codec = 'utf-8'
-        else:
-            self._codec = None
+        self._codec = codec or 'utf-8'
         self._binary = True if 'b' in mode else False
 
         if path[:6] == "nfs://":
@@ -73,8 +67,6 @@ class NFSFH(object):
 
         self._nfsfh = new_NFSFileHandle()
         _status = nfs_open(self._nfs, path, _mode, self._nfsfh)
-        if _status == -errno.ENOENT and _mode & os.O_CREAT:
-            _status = nfs_create(self._nfs, path, _mode, 0o664, self._nfsfh)
         if _status == -errno.ENOENT:
                 raise IOError(errno.ENOENT, 'No such file or directory');
         if _status != 0:
@@ -85,10 +77,15 @@ class NFSFH(object):
         self._need_flush = False
         self._writing = True if _mode & (os.O_RDWR|os.O_WRONLY) else False
 
-    def __del__(self):
-        pass
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
 
     def close(self):
+        if self._closed:
+            return
         if self._need_flush:
             self.flush()
         nfs_close(self._nfs, self._nfsfh)
@@ -96,17 +93,22 @@ class NFSFH(object):
 
     def write(self, data):
         if self._closed:
-            raise ValueError('I/O operation on closed file');
+            raise ValueError('I/O operation on closed file')
         if not self._writing:
-            raise IOError('Trying to write on file open for reading');
+            raise IOError('Trying to write on file open for reading')
 
-        if not isinstance(data, bytearray):
-            if self._codec:
-                data = bytearray(data.encode(self._codec))
-            else:
-                data = bytearray(data)
-        nfs_write(self._nfs, self._nfsfh, len(data), data)
+        if not self._binary:
+            if not isinstance(data, str):
+                raise TypeError(f'write() argument must be str, not {type(data).__name__}')
+            data = data.encode(self._codec)
+
+        with memoryview(data) as view:
+            ret = nfs_write(self._nfs, self._nfsfh, view, view.nbytes)
         self._need_flush = True
+        if ret < 0:
+            raise IOError(-ret, os.strerror(-ret))
+
+        return ret
 
     def read(self, size=-1):
         if size < 0:
@@ -118,14 +120,12 @@ class NFSFH(object):
             size = _st.nfs_size - _pos
 
         buf = bytearray(size)
-        count = nfs_read(self._nfs, self._nfsfh, len(buf), buf)
-        if self._binary:
-            return buf[:count]
+        ret = nfs_read(self._nfs, self._nfsfh, buf, len(buf))
+        if ret < 0:
+            raise IOError(-ret, os.strerror(-ret))
 
-        if self._codec:
-            return buf[:count].decode(self._codec)
-        else:
-            return str(buf[:count])
+        data = bytes(memoryview(buf)[:ret])
+        return data if self._binary else data.decode(self._codec)
 
     def fstat(self):
         _stat = nfs_stat_64()
@@ -174,7 +174,7 @@ class NFSFH(object):
         return nfs_get_error(self._nfs)
 
 
-class NFS(object):
+class NFS:
     def __init__(self, url):
         self._nfs = nfs_init_context()
         self._url = nfs_parse_url_dir(self._nfs, url)
@@ -273,11 +273,10 @@ class NFS(object):
             raise IOError(errno.ENOENT, 'No such file or directory')
         return ret
 
+    @property
+    def error(self):
+        return nfs_get_error(self._nfs)
 
-@property
-def error(self):
-    return nfs_get_error(self._nfs)
 
 def open(url, mode='r', codec=None):
     return NFSFH(None, url, mode=mode, codec=codec)
-
