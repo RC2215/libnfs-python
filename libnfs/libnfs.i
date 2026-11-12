@@ -30,7 +30,26 @@
 %array_functions(struct timeval, TimeValArray)
 
 %include <pybuffer.i>
-%pybuffer_mutable_string(char *buff);
+%pybuffer_mutable_string(char *buf);
+
+
+%typemap(in) (void *buf) (Py_buffer view = {0}) {
+    if (PyObject_GetBuffer($input, &view, PyBUF_WRITABLE))
+        SWIG_fail;
+    $1 = view.buf;
+}
+%typemap(freearg) (void *buf) {
+    PyBuffer_Release(&view$argnum);
+}
+
+%typemap(in) (const void *buf) (Py_buffer view = {0}) {
+    if (PyObject_GetBuffer($input, &view, PyBUF_SIMPLE))
+        SWIG_fail;
+    $1 = view.buf;
+}
+%typemap(freearg) (const void *buf) {
+    PyBuffer_Release(&view$argnum);
+}
 
 /* Map char ** to Python list
  *
@@ -63,7 +82,7 @@
 %typemap(argout) char ** {
     if (*$1 != NULL) {
         int rc;
-        PyObject *symlink = PyString_FromString(*$1);
+        PyObject *symlink = PyUnicode_FromString(*$1);
         if (symlink == NULL)
             SWIG_fail;
         rc = PyList_Insert($input, 0, symlink);
@@ -89,6 +108,7 @@ struct timeval {
 
 struct nfs_url {
 	char *server;
+	int port;
 	char *path;
 	char *file;
 };
@@ -154,12 +174,11 @@ extern struct nfs_url *nfs_parse_url_full(struct nfs_context *nfs, const char *u
 extern struct nfs_url *nfs_parse_url_dir(struct nfs_context *nfs, const char *url);
 extern struct nfs_url *nfs_parse_url_incomplete(struct nfs_context *nfs, const char *url);
 extern void nfs_destroy_url(struct nfs_url *url);
-extern uint64_t nfs_get_readmax(struct nfs_context *nfs);
-extern uint64_t nfs_get_writemax(struct nfs_context *nfs);
+extern size_t nfs_get_readmax(struct nfs_context *nfs);
+extern size_t nfs_get_writemax(struct nfs_context *nfs);
 extern void nfs_set_tcp_syncnt(struct nfs_context *nfs, int v);
 extern void nfs_set_uid(struct nfs_context *nfs, int uid);
 extern void nfs_set_gid(struct nfs_context *nfs, int gid);
-extern void nfs_set_readahead(struct nfs_context *nfs, uint32_t v);
 
 extern int nfs_mount(struct nfs_context *nfs, const char *server, const char *exportname);
 extern int nfs_stat64(struct nfs_context *nfs, const char *path, struct nfs_stat_64 *st);
@@ -167,10 +186,10 @@ extern int nfs_lstat64(struct nfs_context *nfs, const char *path, struct nfs_sta
 extern int nfs_fstat64(struct nfs_context *nfs, struct nfsfh *nfsfh, struct nfs_stat_64 *st);
 extern int nfs_open(struct nfs_context *nfs, const char *path, int flags, struct nfsfh **nfsfh);
 extern int nfs_close(struct nfs_context *nfs, struct nfsfh *nfsfh);
-extern int nfs_pread(struct nfs_context *nfs, struct nfsfh *nfsfh, uint64_t offset, uint64_t count, char *buff);
-extern int nfs_read(struct nfs_context *nfs, struct nfsfh *nfsfh, uint64_t count, char *buff);
-extern int nfs_pwrite(struct nfs_context *nfs, struct nfsfh *nfsfh, uint64_t offset, uint64_t count, char *buff);
-extern int nfs_write(struct nfs_context *nfs, struct nfsfh *nfsfh, uint64_t count, char *buff);
+extern int nfs_pread(struct nfs_context *nfs, struct nfsfh *nfsfh, void *buf, size_t count, uint64_t offset);
+extern int nfs_read(struct nfs_context *nfs, struct nfsfh *nfsfh, void *buf, size_t count);
+extern int nfs_pwrite(struct nfs_context *nfs, struct nfsfh *nfsfh, const void *buf, size_t count, uint64_t offset);
+extern int nfs_write(struct nfs_context *nfs, struct nfsfh *nfsfh, const void *buf, uint64_t count);
 extern int nfs_lseek(struct nfs_context *nfs, struct nfsfh *nfsfh, int64_t offset, int whence, uint64_t *current_offset);
 extern int nfs_fsync(struct nfs_context *nfs, struct nfsfh *nfsfh);
 extern int nfs_truncate(struct nfs_context *nfs, const char *path, uint64_t length);
@@ -179,7 +198,7 @@ extern int nfs_mkdir(struct nfs_context *nfs, const char *path);
 extern int nfs_mkdir2(struct nfs_context *nfs, const char *path, int mode);
 extern int nfs_rmdir(struct nfs_context *nfs, const char *path);
 extern int nfs_creat(struct nfs_context *nfs, const char *path, int mode, struct nfsfh **nfsfh);
-extern int nfs_create(struct nfs_context *nfs, const char *path, int flags, int mode, struct nfsfh **nfsfh);
+extern int nfs_open2(struct nfs_context *nfs, const char *path, int flags, int mode, struct nfsfh **nfsfh);
 extern int nfs_mknod(struct nfs_context *nfs, const char *path, int mode, int dev);
 extern int nfs_unlink(struct nfs_context *nfs, const char *path);
 extern int nfs_opendir(struct nfs_context *nfs, const char *path, struct nfsdir **nfsdir);
@@ -187,8 +206,8 @@ extern struct nfsdirent *nfs_readdir(struct nfs_context *nfs, struct nfsdir *nfs
 extern void nfs_closedir(struct nfs_context *nfs, struct nfsdir *nfsdir);
 extern int nfs_chdir(struct nfs_context *nfs, const char *path);
 extern void nfs_getcwd(struct nfs_context *nfs, const char **cwd);
-extern int nfs_readlink(struct nfs_context *nfs, const char *path, char *buff, int bufsize);
-extern int nfs_readlink2(struct nfs_context *nfs, const char *path, char **buf);
+extern int nfs_readlink(struct nfs_context *nfs, const char *path, char *buf, int bufsize);
+extern int nfs_readlink2(struct nfs_context *nfs, const char *path, char **bufptr);
 extern int nfs_chmod(struct nfs_context *nfs, const char *path, int mode);
 extern int nfs_lchmod(struct nfs_context *nfs, const char *path, int mode);
 extern int nfs_fchmod(struct nfs_context *nfs, struct nfsfh *nfsfh, int mode);
