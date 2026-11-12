@@ -16,7 +16,6 @@
 import errno
 import os
 import stat
-import sys
 from .libnfs import *
 
 def _stat_to_dict(stat):
@@ -39,19 +38,19 @@ def _stat_to_dict(stat):
                 }
 
 
-class NFSFH(object):
-    def __init__(self, nfs, path, mode='r', codec=None):
+def verify_enoent(result):
+    if result == -errno.ENOENT:
+        raise IOError(errno.ENOENT, 'No such file or directory')
 
+
+class NFSFH:
+    def __init__(self, nfs, path, mode='r', codec=None):
         self._nfs = nfs
         self._name = path
-
-        if codec:
-            self._codec = codec
-        elif sys.version_info[0] > 2:
+        self._binary = 'b' in mode
+        self._codec = codec
+        if codec is None and not self._binary:
             self._codec = 'utf-8'
-        else:
-            self._codec = None
-        self._binary = True if 'b' in mode else False
 
         if path[:6] == "nfs://":
             _pos = path.rfind('/')
@@ -60,7 +59,7 @@ class NFSFH(object):
             self._private_context = NFS(_dir)
             self._nfs = self._private_context._nfs
 
-        _plus = True if '+' in mode else False
+        _plus = '+' in mode
         _mode = 0
         if 'r' in mode:
             _mode = os.O_RDWR if _plus else os.O_RDONLY
@@ -76,19 +75,28 @@ class NFSFH(object):
         if _status == -errno.ENOENT and _mode & os.O_CREAT:
             _status = nfs_open2(self._nfs, path, _mode, 0o664, self._nfsfh)
         if _status == -errno.ENOENT:
-                raise IOError(errno.ENOENT, 'No such file or directory');
+            raise IOError(errno.ENOENT, 'No such file or directory')
         if _status != 0:
             _errmsg = "open failed: %s" % (os.strerror(-_status),)
             raise ValueError(_errmsg)
+        # move to open?
         self._nfsfh = NFSFileHandle_value(self._nfsfh)
         self._closed = False
         self._need_flush = False
-        self._writing = True if _mode & (os.O_RDWR|os.O_WRONLY) else False
+        self._writing = bool(_mode & (os.O_RDWR|os.O_WRONLY))
 
-    def __del__(self):
-        pass
+    def open(self):
+        nfsfh = new_NFSFileHandle()
+        _status = nfs_open(self._nfs, path, _mode, nfsfh)
+        if _status == -errno.ENOENT:
+            raise IOError(errno.ENOENT, 'No such file or directory')
+        if _status != 0:
+            _errmsg = "open failed: %s" % (os.strerror(-_status),)
+            raise ValueError(_errmsg)
 
     def close(self):
+        if self._closed:
+            return
         if self._need_flush:
             self.flush()
         nfs_close(self._nfs, self._nfsfh)
@@ -96,9 +104,9 @@ class NFSFH(object):
 
     def write(self, data):
         if self._closed:
-            raise ValueError('I/O operation on closed file');
+            raise ValueError('I/O operation on closed file')
         if not self._writing:
-            raise IOError('Trying to write on file open for reading');
+            raise IOError('Trying to write on file open for reading')
 
         if not isinstance(data, bytearray):
             if self._codec:
@@ -154,7 +162,7 @@ class NFSFH(object):
 
     def flush(self):
         if self._closed:
-            raise ValueError('I/O operation on closed file');
+            raise ValueError('I/O operation on closed file')
         nfs_fsync(self._nfs, self._nfsfh)
         self._need_flush = False
 
@@ -174,13 +182,13 @@ class NFSFH(object):
         return nfs_get_error(self._nfs)
 
 
-class NFS(object):
+class NFS:
     def __init__(self, url):
         self._nfs = nfs_init_context()
         self._url = nfs_parse_url_dir(self._nfs, url)
         ret = nfs_mount(self._nfs, self._url.server, self._url.path)
         if ret != 0:
-            raise IOError(nfs_get_error(self._nfs))
+            raise IOError(self.error)
 
     def __del__(self):
         nfs_destroy_url(self._url)
@@ -193,48 +201,49 @@ class NFS(object):
         _stat = nfs_stat_64()
         ret = nfs_stat64(self._nfs, path, _stat)
         if ret == -errno.ENOENT:
-                raise IOError(errno.ENOENT, 'No such file or directory');
+            raise IOError(errno.ENOENT, 'No such file or directory')
         return _stat_to_dict(_stat)
 
     def lstat(self, path):
         _stat = nfs_stat_64()
         ret = nfs_lstat64(self._nfs, path, _stat)
         if ret == -errno.ENOENT:
-                raise IOError(errno.ENOENT, 'No such file or directory');
+            raise IOError(errno.ENOENT, 'No such file or directory')
         return _stat_to_dict(_stat)
 
     def unlink(self, path):
         ret = nfs_unlink(self._nfs, path)
         if ret == -errno.ENOENT:
-                raise IOError(errno.ENOENT, 'No such file or directory');
+            raise IOError(errno.ENOENT, 'No such file or directory')
         return ret
 
     def mkdir(self, path):
         ret = nfs_mkdir(self._nfs, path)
         if ret == -errno.ENOENT:
-                raise IOError(errno.ENOENT, 'No such file or directory');
+            raise IOError(errno.ENOENT, 'No such file or directory')
         return ret
 
     def rmdir(self, path):
         ret = nfs_rmdir(self._nfs, path)
         if ret == -errno.ENOENT:
-                raise IOError(errno.ENOENT, 'No such file or directory');
+            raise IOError(errno.ENOENT, 'No such file or directory')
         return ret
 
     def listdir(self, path):
-        d = new_NFSDirHandle()
-        ret = nfs_opendir(self._nfs, path, d)
+        dh = new_NFSDirHandle()
+        ret = nfs_opendir(self._nfs, path, dh)  # as a python function?? so that we will handle no such entry?
+
         if ret == -errno.ENOENT:
-                raise IOError(errno.ENOENT, 'No such file or directory');
-        d = NFSDirHandle_value(d)
+            raise IOError(errno.ENOENT, 'No such file or directory')
+        d = NFSDirHandle_value(dh)
 
         ret = []
         while True:
-                de = nfs_readdir(self._nfs, d)
-                if de == None:
-                        break
+            de = nfs_readdir(self._nfs, d)
+            if de is None:
+                break
 
-                ret.append(de.name)
+            ret.append(de.name)
         return ret
 
     def makedirs(self, path):
@@ -247,7 +256,7 @@ class NFS(object):
         _stat = nfs_stat_64()
         ret = nfs_stat64(self._nfs, path, _stat)
         if ret == -errno.ENOENT:
-                raise IOError(errno.ENOENT, 'No such file or directory')
+            raise IOError(errno.ENOENT, 'No such file or directory')
         return _stat
 
     def isfile(self, path):
@@ -273,11 +282,9 @@ class NFS(object):
             raise IOError(errno.ENOENT, 'No such file or directory')
         return ret
 
-
-@property
-def error(self):
-    return nfs_get_error(self._nfs)
+    @property
+    def error(self):
+        return nfs_get_error(self._nfs)
 
 def open(url, mode='r', codec=None):
     return NFSFH(None, url, mode=mode, codec=codec)
-

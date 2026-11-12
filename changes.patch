@@ -1,0 +1,148 @@
+diff --git a/README b/README
+index b773ea6..ac598e3 100644
+--- a/README
++++ b/README
+@@ -36,7 +36,7 @@ nfs = libnfs.NFS('nfs://127.0.0.1/data/tmp/')
+ a = nfs.open('/foo-test', mode='w+')
+ a.write("Test string")
+ a.close()
+-print nfs.open('/foo-test', mode='r').read()
++print(nfs.open('/foo-test', mode='r').read())
+ 
+ 
+ Context-free access
+@@ -55,7 +55,7 @@ import libnfs
+ a = libnfs.open('nfs://127.0.0.1/data/tmp/foo-test', mode='w+')
+ a.write("Test string")
+ a.close()
+-print libnfs.open('nfs://127.0.0.1/data/tmp/foo-test', mode='r').read()
++print(libnfs.open('nfs://127.0.0.1/data/tmp/foo-test', mode='r').read())
+ 
+ In the example above we create two instances of a file-like object. First
+ we create and write to the file and second time we read the file back and
+diff --git a/libnfs/__init__.py b/libnfs/__init__.py
+index 57a6d8e..3a874aa 100644
+--- a/libnfs/__init__.py
++++ b/libnfs/__init__.py
+@@ -74,7 +74,7 @@ class NFSFH(object):
+         self._nfsfh = new_NFSFileHandle()
+         _status = nfs_open(self._nfs, path, _mode, self._nfsfh)
+         if _status == -errno.ENOENT and _mode & os.O_CREAT:
+-            _status = nfs_create(self._nfs, path, _mode, 0o664, self._nfsfh)
++            _status = nfs_open2(self._nfs, path, _mode, 0o664, self._nfsfh)
+         if _status == -errno.ENOENT:
+                 raise IOError(errno.ENOENT, 'No such file or directory');
+         if _status != 0:
+@@ -105,7 +105,7 @@ class NFSFH(object):
+                 data = bytearray(data.encode(self._codec))
+             else:
+                 data = bytearray(data)
+-        nfs_write(self._nfs, self._nfsfh, len(data), data)
++        nfs_write(self._nfs, self._nfsfh, data)
+         self._need_flush = True
+ 
+     def read(self, size=-1):
+@@ -118,14 +118,14 @@ class NFSFH(object):
+             size = _st.nfs_size - _pos
+ 
+         buf = bytearray(size)
+-        count = nfs_read(self._nfs, self._nfsfh, len(buf), buf)
++        count = nfs_read(self._nfs, self._nfsfh, buf)
+         if self._binary:
+             return buf[:count]
+ 
+         if self._codec:
+             return buf[:count].decode(self._codec)
+         else:
+-            return str(buf[:count])
++            return bytes(buf[:count])
+ 
+     def fstat(self):
+         _stat = nfs_stat_64()
+diff --git a/libnfs/libnfs.i b/libnfs/libnfs.i
+index 6201e94..71283b3 100644
+--- a/libnfs/libnfs.i
++++ b/libnfs/libnfs.i
+@@ -30,7 +30,8 @@
+ %array_functions(struct timeval, TimeValArray)
+ 
+ %include <pybuffer.i>
+-%pybuffer_mutable_string(char *buff);
++%pybuffer_mutable_binary(void *buf, size_t count);
++%pybuffer_binary(const void *buf, size_t count);
+ 
+ /* Map char ** to Python list
+  *
+@@ -63,7 +64,7 @@
+ %typemap(argout) char ** {
+     if (*$1 != NULL) {
+         int rc;
+-        PyObject *symlink = PyString_FromString(*$1);
++        PyObject *symlink = PyUnicode_FromString(*$1);
+         if (symlink == NULL)
+             SWIG_fail;
+         rc = PyList_Insert($input, 0, symlink);
+@@ -89,6 +90,7 @@ struct timeval {
+ 
+ struct nfs_url {
+ 	char *server;
++	int  port;
+ 	char *path;
+ 	char *file;
+ };
+@@ -159,7 +161,6 @@ extern uint64_t nfs_get_writemax(struct nfs_context *nfs);
+ extern void nfs_set_tcp_syncnt(struct nfs_context *nfs, int v);
+ extern void nfs_set_uid(struct nfs_context *nfs, int uid);
+ extern void nfs_set_gid(struct nfs_context *nfs, int gid);
+-extern void nfs_set_readahead(struct nfs_context *nfs, uint32_t v);
+ 
+ extern int nfs_mount(struct nfs_context *nfs, const char *server, const char *exportname);
+ extern int nfs_stat64(struct nfs_context *nfs, const char *path, struct nfs_stat_64 *st);
+@@ -167,10 +168,10 @@ extern int nfs_lstat64(struct nfs_context *nfs, const char *path, struct nfs_sta
+ extern int nfs_fstat64(struct nfs_context *nfs, struct nfsfh *nfsfh, struct nfs_stat_64 *st);
+ extern int nfs_open(struct nfs_context *nfs, const char *path, int flags, struct nfsfh **nfsfh);
+ extern int nfs_close(struct nfs_context *nfs, struct nfsfh *nfsfh);
+-extern int nfs_pread(struct nfs_context *nfs, struct nfsfh *nfsfh, uint64_t offset, uint64_t count, char *buff);
+-extern int nfs_read(struct nfs_context *nfs, struct nfsfh *nfsfh, uint64_t count, char *buff);
+-extern int nfs_pwrite(struct nfs_context *nfs, struct nfsfh *nfsfh, uint64_t offset, uint64_t count, char *buff);
+-extern int nfs_write(struct nfs_context *nfs, struct nfsfh *nfsfh, uint64_t count, char *buff);
++extern int nfs_pread(struct nfs_context *nfs, struct nfsfh *nfsfh, void *buf, size_t count, uint64_t offset);
++extern int nfs_read(struct nfs_context *nfs, struct nfsfh *nfsfh, void *buf, size_t count);
++extern int nfs_pwrite(struct nfs_context *nfs, struct nfsfh *nfsfh, const void *buf, size_t count, uint64_t offset);
++extern int nfs_write(struct nfs_context *nfs, struct nfsfh *nfsfh, const void *buf, size_t count);
+ extern int nfs_lseek(struct nfs_context *nfs, struct nfsfh *nfsfh, int64_t offset, int whence, uint64_t *current_offset);
+ extern int nfs_fsync(struct nfs_context *nfs, struct nfsfh *nfsfh);
+ extern int nfs_truncate(struct nfs_context *nfs, const char *path, uint64_t length);
+@@ -179,7 +180,7 @@ extern int nfs_mkdir(struct nfs_context *nfs, const char *path);
+ extern int nfs_mkdir2(struct nfs_context *nfs, const char *path, int mode);
+ extern int nfs_rmdir(struct nfs_context *nfs, const char *path);
+ extern int nfs_creat(struct nfs_context *nfs, const char *path, int mode, struct nfsfh **nfsfh);
+-extern int nfs_create(struct nfs_context *nfs, const char *path, int flags, int mode, struct nfsfh **nfsfh);
++extern int nfs_open2(struct nfs_context *nfs, const char *path, int flags, int mode, struct nfsfh **nfsfh);
+ extern int nfs_mknod(struct nfs_context *nfs, const char *path, int mode, int dev);
+ extern int nfs_unlink(struct nfs_context *nfs, const char *path);
+ extern int nfs_opendir(struct nfs_context *nfs, const char *path, struct nfsdir **nfsdir);
+diff --git a/setup.py b/setup.py
+index 81a8e8c..2778d2f 100644
+--- a/setup.py
++++ b/setup.py
+@@ -3,9 +3,11 @@ from os import environ
+ 
+ try:
+     from setuptools import setup, Extension
++    from setuptools.command.build import build
+     from setuptools.command.build_ext import build_ext
+ except ImportError:
+     from distutils.core import setup, Extension
++    from distutils.command.build import build
+     from distutils.command.build_ext import build_ext
+ 
+ # Although setuptools supports swig, it fails to copy the generated
+@@ -24,7 +26,6 @@ else:
+             install.run(self)
+     cmdclass['install'] = Install
+ 
+-from distutils.command.build import build
+ 
+ class Build(build):
+     def run(self):
