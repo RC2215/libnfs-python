@@ -107,7 +107,7 @@ class NFSFH(object):
                 data = bytearray(data.encode(self._codec))
             else:
                 data = bytearray(data)
-        nfs_write(self._nfs, self._nfsfh, data)
+        nfs_write(self._nfs, self._nfsfh, data, len(data))
         self._need_flush = True
 
     def read(self, size=-1):
@@ -120,7 +120,7 @@ class NFSFH(object):
             size = _st.nfs_size - _pos
 
         buf = bytearray(size)
-        count = nfs_read(self._nfs, self._nfsfh, buf)
+        count = nfs_read(self._nfs, self._nfsfh, buf, len(buf))
         if self._binary:
             return buf[:count]
 
