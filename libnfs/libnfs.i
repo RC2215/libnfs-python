@@ -66,11 +66,11 @@
 %typemap(argout) char ** {
     if (*$1 != NULL) {
         int rc;
-    #if PY_VERSION_HEX > 0x02000000
+    %#if PY_VERSION_HEX > 0x02000000
         PyObject *symlink = PyUnicode_FromString(*$1);
-    #else
+    %#else
         PyObject *symlink = PyString_FromString(*$1);
-    #endif
+    %#endif
         if (symlink == NULL)
             SWIG_fail;
         rc = PyList_Insert($input, 0, symlink);
