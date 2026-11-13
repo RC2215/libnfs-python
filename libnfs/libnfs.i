@@ -38,18 +38,18 @@
         SWIG_fail;
     $1 = view.buf;
 }
-%typemap(freearg) (void *buf) {
-    PyBuffer_Release(&view$argnum);
-}
+// %typemap(freearg) (void *buf) {
+//     PyBuffer_Release(&view$argnum);
+// }
 
 %typemap(in) (const void *buf) (Py_buffer view = {0}) {
     if (PyObject_GetBuffer($input, &view, PyBUF_SIMPLE))
         SWIG_fail;
     $1 = view.buf;
 }
-%typemap(freearg) (const void *buf) {
-    PyBuffer_Release(&view$argnum);
-}
+// %typemap(freearg) (const void *buf) {
+//     PyBuffer_Release(&view$argnum);
+// }
 
 /* Map char ** to Python list
  *
