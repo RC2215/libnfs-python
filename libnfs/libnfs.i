@@ -66,7 +66,7 @@
 %typemap(argout) char ** {
     if (*$1 != NULL) {
         int rc;
-    #if PY_MAJOR_VERSION > 2
+    #if PY_VERSION_HEX > 0x02000000
         PyObject *symlink = PyUnicode_FromString(*$1);
     #else
         PyObject *symlink = PyString_FromString(*$1);
