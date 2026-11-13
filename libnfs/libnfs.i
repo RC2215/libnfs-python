@@ -34,18 +34,18 @@
 
 
 %typemap(in) (void *buf) (Py_buffer view = {0}) {
-    if (PyObject_GetBuffer($input, &view$argnum, PyBUF_WRITABLE))
+    if (PyObject_GetBuffer($input, &view, PyBUF_WRITABLE))
         SWIG_fail;
-    $1 = view$argnum.buf;
+    $1 = view.buf;
 }
 %typemap(freearg) (void *buf) {
     PyBuffer_Release(&view$argnum);
 }
 
 %typemap(in) (const void *buf) (Py_buffer view = {0}) {
-    if (PyObject_GetBuffer($input, &view$argnum, PyBUF_SIMPLE))
+    if (PyObject_GetBuffer($input, &view, PyBUF_SIMPLE))
         SWIG_fail;
-    $1 = view$argnum.buf;
+    $1 = view.buf;
 }
 %typemap(freearg) (const void *buf) {
     PyBuffer_Release(&view$argnum);
