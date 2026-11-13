@@ -66,7 +66,7 @@
 %typemap(argout) char ** {
     if (*$1 != NULL) {
         int rc;
-        PyObject *symlink = SWIG_Python_str_FromChar(*$1);
+        PyObject *symlink = PyUnicode_FromString(*$1);
         if (symlink == NULL)
             SWIG_fail;
         rc = PyList_Insert($input, 0, symlink);
