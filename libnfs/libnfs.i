@@ -31,9 +31,25 @@
 
 %include <pybuffer.i>
 %pybuffer_mutable_string(char *buf);
-%pybuffer_mutable_binary(void *buf, size_t count);
-%pybuffer_binary(const void *buf, size_t count);
-%pybuffer_binary(const void *buf, uint64_t count);
+
+
+%typemap(in) (void *buf) (Py_buffer view = {0}) {
+    if (PyObject_GetBuffer($input, &view, PyBUF_WRITABLE))
+        SWIG_fail;
+    $1 = view.buf;
+}
+%typemap(freearg) (void *buf) {
+    PyBuffer_Release(&view);
+}
+
+%typemap(in) (const void *buf) (Py_buffer view = {0}) {
+    if (PyObject_GetBuffer($input, &view, PyBUF_SIMPLE))
+        SWIG_fail;
+    $1 = view.buf;
+}
+%typemap(freearg) (const void *buf) {
+    PyBuffer_Release(&view);
+}
 
 /* Map char ** to Python list
  *
@@ -171,9 +187,9 @@ extern int nfs_fstat64(struct nfs_context *nfs, struct nfsfh *nfsfh, struct nfs_
 extern int nfs_open(struct nfs_context *nfs, const char *path, int flags, struct nfsfh **nfsfh);
 extern int nfs_close(struct nfs_context *nfs, struct nfsfh *nfsfh);
 extern int nfs_pread(struct nfs_context *nfs, struct nfsfh *nfsfh, void *buf, size_t count, uint64_t offset);
-extern int nfs_read(struct nfs_context *nfs, struct nfsfh *nfsfh, char *buf, size_t count);
+extern int nfs_read(struct nfs_context *nfs, struct nfsfh *nfsfh, void *buf, size_t count);
 extern int nfs_pwrite(struct nfs_context *nfs, struct nfsfh *nfsfh, const void *buf, size_t count, uint64_t offset);
-extern int nfs_write(struct nfs_context *nfs, struct nfsfh *nfsfh, char *buf, uint64_t count);
+extern int nfs_write(struct nfs_context *nfs, struct nfsfh *nfsfh, const void *buf, uint64_t count);
 extern int nfs_lseek(struct nfs_context *nfs, struct nfsfh *nfsfh, int64_t offset, int whence, uint64_t *current_offset);
 extern int nfs_fsync(struct nfs_context *nfs, struct nfsfh *nfsfh);
 extern int nfs_truncate(struct nfs_context *nfs, const char *path, uint64_t length);
