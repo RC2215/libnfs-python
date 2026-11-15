@@ -32,23 +32,24 @@
 %include <pybuffer.i>
 %pybuffer_mutable_string(char *buf);
 
-%typemap(in) (void *buf) {
-  Py_buffer view;
-  if (PyObject_GetBuffer($input, &view, PyBUF_CONTIG)) {
-    SWIG_fail;
-  }
-  $1 = view.buf;
-  PyBuffer_Release(&view);
+%typemap(in) (void *buf) (Py_buffer view = {0}) {
+    if (PyObject_GetBuffer($input, &view, PyBUF_CONTIG))
+        SWIG_fail;
+    $1 = view.buf;
+}
+%typemap(freearg) (void *buf) {
+    PyBuffer_Release(&view$argnum);
 }
 
-%typemap(in) (const void *buf) {
-  Py_buffer view;
-  if (PyObject_GetBuffer($input, &view, PyBUF_CONTIG_RO)) {
-    SWIG_fail;
-  }
-  $1 = view.buf;
-  PyBuffer_Release(&view);
+%typemap(in) (const void *buf) (Py_buffer view = {0}) {
+    if (PyObject_GetBuffer($input, &view, PyBUF_CONTIG_RO))
+        SWIG_fail;
+    $1 = view.buf;
 }
+%typemap(freearg) (const void *buf) {
+    PyBuffer_Release(&view$argnum);
+}
+
 
 /* Map char ** to Python list
  *
