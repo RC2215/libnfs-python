@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 from os import environ
 
 try:
@@ -67,7 +67,7 @@ setup(name = name,
           'Intended Audience :: Developers',
           'Operating System :: OS Independent',
           'Programming Language :: C',
-          'Programming Language :: Python',
+          'Programming Language :: Python 3',
           'Topic :: Software Development :: Libraries :: Python Modules',
           'Topic :: Communications :: File Sharing',
           'Topic :: System :: Filesystems',
