@@ -66,7 +66,7 @@
  *
  *  cwd = []
  *  nfs_getcwd(nfs, cwd)
- *  print cwd[0]
+ *  print(cwd[0])
  */
 %typemap(in) char ** (char *buf = NULL) {
     if (!PyList_Check($input)) {
@@ -82,7 +82,7 @@
 %typemap(argout) char ** {
     if (*$1 != NULL) {
         int rc;
-        PyObject *symlink = PyUnicode_FromString(*$1);
+        PyObject *symlink = PyUnicode_DecodeFSDefault(*$1);
         if (symlink == NULL)
             SWIG_fail;
         rc = PyList_Insert($input, 0, symlink);
