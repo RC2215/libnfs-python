@@ -45,12 +45,7 @@ class NFSFH(object):
         self._nfs = nfs
         self._name = path
 
-        if codec:
-            self._codec = codec
-        elif sys.version_info[0] > 2:
-            self._codec = 'utf-8'
-        else:
-            self._codec = None
+        self._codec = codec if codec is not None else 'utf-8'
         self._binary = True if 'b' in mode else False
 
         if path[:6] == "nfs://":
@@ -102,12 +97,10 @@ class NFSFH(object):
         if not self._writing:
             raise IOError('Trying to write on file open for reading');
 
-        if not isinstance(data, bytearray):
-            if self._codec:
-                data = bytearray(data.encode(self._codec))
-            else:
-                data = bytearray(data)
-        nfs_write(self._nfs, self._nfsfh, data, len(data))
+        if isinstance(data, str):
+            data = data.encode(self._codec)
+        data = memoryview(data)
+        nfs_write(self._nfs, self._nfsfh, data, data.nbytes)
         self._need_flush = True
 
     def read(self, size=-1):
@@ -121,13 +114,8 @@ class NFSFH(object):
 
         buf = bytearray(size)
         count = nfs_read(self._nfs, self._nfsfh, buf, len(buf))
-        if self._binary:
-            return buf[:count]
-
-        if self._codec:
-            return buf[:count].decode(self._codec)
-        else:
-            return str(buf[:count])
+        data = buf[:count]
+        return data if self._binary else data.decode(self._codec)
 
     def fstat(self):
         _stat = nfs_stat_64()
