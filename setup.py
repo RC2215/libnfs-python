@@ -62,7 +62,7 @@ setup(name = name,
       url = 'https://github.com/sahlberg/libnfs-python/',
       download_url = download_url,
       packages = ['libnfs'],
-      python_requires='>=3.8',
+      python_requires='>=3.6',
       classifiers = [
           'Development Status :: 4 - Beta',
           'Intended Audience :: Developers',
