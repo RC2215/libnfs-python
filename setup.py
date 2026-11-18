@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 from os import environ
 
 try:
@@ -62,12 +62,14 @@ setup(name = name,
       url = 'https://github.com/sahlberg/libnfs-python/',
       download_url = download_url,
       packages = ['libnfs'],
+      python_requires='>=3.6',
       classifiers = [
           'Development Status :: 4 - Beta',
           'Intended Audience :: Developers',
           'Operating System :: OS Independent',
           'Programming Language :: C',
           'Programming Language :: Python',
+          'Programming Language :: Python :: 3 :: Only',
           'Topic :: Software Development :: Libraries :: Python Modules',
           'Topic :: Communications :: File Sharing',
           'Topic :: System :: Filesystems',
