@@ -271,3 +271,9 @@ extern void nfs_set_timeout(struct nfs_context *nfs, int milliseconds);
 extern int nfs_get_timeout(struct nfs_context *nfs);
 extern int nfs_set_version(struct nfs_context *nfs, int version);
 extern int nfs_get_version(struct nfs_context *nfs);
+
+enum rpc_transport {
+        RPC_TRANSPORT_TCP  = 0,
+        RPC_TRANSPORT_RDMA,
+};
+extern int nfs_set_transport(struct nfs_context *nfs, enum rpc_transport transport);
