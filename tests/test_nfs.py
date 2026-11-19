@@ -259,12 +259,28 @@ class NFSMinorVersionTests(unittest.TestCase):
     def test_nfsv42(self):
         self.check_minor_version('4.2', libnfs.NFS_V4_2)
 
-    def test_set_version_before_mount(self):
-        ctx = libnfs.nfs_init_context()
-        self.addCleanup(libnfs.nfs_destroy_context, ctx)
-        self.assertEqual(libnfs.nfs_set_version(ctx, libnfs.NFS_V4), 0)
-        self.assertEqual(libnfs.nfs_get_version(ctx), libnfs.NFS_V4)
-        self.assertLess(libnfs.nfs_set_version(ctx, 99), 0)
+
+class NFSContextConfigurationTests(unittest.TestCase):
+    def setUp(self):
+        self.ctx = libnfs.nfs_init_context()
+        self.addCleanup(libnfs.nfs_destroy_context, self.ctx)
+
+    def test_set_version(self):
+        self.assertEqual(libnfs.nfs_set_version(self.ctx, libnfs.NFS_V4), 0)
+        self.assertEqual(libnfs.nfs_get_version(self.ctx), libnfs.NFS_V4)
+
+        self.assertEqual(libnfs.nfs_set_version(self.ctx, 99), -1)
+        self.assertIn('is not supported', libnfs.nfs_get_error(self.ctx))
+
+    def test_set_transport(self):
+        self.assertEqual(libnfs.nfs_set_transport(self.ctx, libnfs.RPC_TRANSPORT_TCP), 0)
+        ret = libnfs.nfs_set_transport(self.ctx, libnfs.RPC_TRANSPORT_RDMA)
+        self.assertIn(ret, (0, -1))
+        if ret == -1:
+            self.assertIn('without RDMA support', libnfs.nfs_get_error(self.ctx))
+
+        self.assertEqual(libnfs.nfs_set_transport(self.ctx, 99), -1)
+        self.assertIn('Unknown transport', libnfs.nfs_get_error(self.ctx))
 
 
 class NFSv3Tests(NFSTests, unittest.TestCase):
