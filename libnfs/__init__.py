@@ -16,6 +16,8 @@
 import errno
 import os
 import stat
+from functools import wraps
+
 from .libnfs import *
 
 try:
@@ -43,9 +45,18 @@ def _stat_to_dict(stat):
                 }
 
 
+def _ensure_open(method):
+    @wraps(method)
+    def wrapper(obj=None, *args, **kwargs):
+        if getattr(obj, '_closed', False):
+            raise ValueError('I/O operation on closed file')
+        return method(obj, *args, **kwargs)
+
+    return wrapper
+
+
 class NFSFH:
     def __init__(self, nfs, path, mode='r', codec=None):
-
         self._nfs = nfs
         self._name = path
 
@@ -96,9 +107,8 @@ class NFSFH:
         nfs_close(self._nfs, self._nfsfh)
         self._closed = True
 
+    @_ensure_open
     def write(self, data):
-        if self._closed:
-            raise ValueError('I/O operation on closed file')
         if not self._writing:
             raise IOError('Trying to write on file open for reading')
 
@@ -115,6 +125,7 @@ class NFSFH:
 
         return ret
 
+    @_ensure_open
     def read(self, size=-1):
         if size < 0:
             _pos = self.tell()
@@ -132,37 +143,42 @@ class NFSFH:
         data = bytes(memoryview(buf)[:ret])
         return data if self._binary else data.decode(self._codec)
 
+    @_ensure_open
     def fstat(self):
         _stat = nfs_stat_64()
         nfs_fstat64(self._nfs, self._nfsfh, _stat)
         return _stat_to_dict(_stat)
 
+    @_ensure_open
     def tell(self):
         _pos = new_uint64_t_ptr()
         nfs_lseek(self._nfs, self._nfsfh, 0, os.SEEK_CUR, _pos)
         _pos = uint64_t_ptr_value(_pos)
         return _pos
 
+    @_ensure_open
     def seek(self, offset, whence=os.SEEK_CUR):
         _pos = new_uint64_t_ptr()
         nfs_lseek(self._nfs, self._nfsfh, offset, whence, _pos)
 
+    @_ensure_open
     def truncate(self, offset=-1):
         if offset < 0:
             offset = self.tell()
         nfs_ftruncate(self._nfs, self._nfsfh, offset)
 
+    @_ensure_open
     def fileno(self):
         _st = nfs_stat_64()
         nfs_fstat64(self._nfs, self._nfsfh, _st)
         return _st.nfs_ino
 
+    @_ensure_open
     def flush(self):
-        if self._closed:
-            raise ValueError('I/O operation on closed file');
         nfs_fsync(self._nfs, self._nfsfh)
         self._need_flush = False
 
+    @_ensure_open
     def lock(self, lock_type=F_WRLCK, start=0, length=0,
              whence=os.SEEK_SET, blocking=False):
         """Take an NFSv4 byte-range lock (LOCK).
@@ -172,8 +188,6 @@ class NFSFH:
         client holds a conflicting lock.  libnfs does not translate
         NFS4ERR_DENIED, so that conflict is reported as EIO.
         """
-        if self._closed:
-            raise ValueError('I/O operation on closed file')
         fl = nfs4_flock()
         fl.l_type = lock_type
         fl.l_whence = os.SEEK_SET
@@ -184,16 +198,16 @@ class NFSFH:
         if ret < 0:
             raise self._lock_error(ret)
 
+    @_ensure_open
     def unlock(self, start=0, length=0, whence=os.SEEK_SET):
         """Release a byte-range lock (LOCKU)."""
-        if self._closed:
-            raise ValueError('I/O operation on closed file')
         # nfs_fcntl(F_UNLCK) does not record the stateid returned by LOCKU,
         # so any later lock on this file fails.  nfs_lockf(F_ULOCK) does.
         ret = self._lockf_at(NFS4_F_ULOCK, start, length, whence)
         if ret < 0:
             raise self._lock_error(ret)
 
+    @_ensure_open
     def lockt(self, start=0, length=0, whence=os.SEEK_SET):
         """Test a byte range for a conflicting lock (LOCKT).
 
@@ -201,8 +215,6 @@ class NFSFH:
         an exclusive lock on the range, False if the range is free.  Locks
         taken through this same context never conflict with themselves.
         """
-        if self._closed:
-            raise ValueError('I/O operation on closed file')
         ret = self._lockf_at(NFS4_F_TEST, start, length, whence)
         if ret == 0:
             return False
